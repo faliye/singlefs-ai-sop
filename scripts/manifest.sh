@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # 规则清单：给译文仓对账用的唯一接口。
 #
-#   manifest.sh            校验 MANIFEST.sha256 是否与当前 rules/ 一致（门禁用）
-#   manifest.sh --update   重新生成 MANIFEST.sha256（改了 rules/ 之后跑）
+#   manifest.sh            校验 MANIFEST.sha256 是否与当前 CLAUDE.md + rules/ 一致（门禁用）
+#   manifest.sh --update   重新生成 MANIFEST.sha256（改了 CLAUDE.md 或 rules/ 之后跑）
+#
+# 为什么 CLAUDE.md 也在清单里：它是规范正文，且规定了对话语言。
+# 不进清单的话，改了它译本仓不会知道，三份就会悄悄说不同的话。
 #
 # 为什么要有它：译文不放在本仓（那会让 SOP 随语言数线性膨胀）。
 # 译文各自成仓，生成时抄走这份清单；之后只要比两份清单就知道哪几篇过期了。
@@ -12,7 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 PKG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MF="$PKG/MANIFEST.sha256"
 
-gen() { cd "$PKG" && find rules -maxdepth 1 -name '*.md' | sort | xargs sha256sum; }
+gen() { cd "$PKG" && { echo CLAUDE.md; find rules -maxdepth 1 -name '*.md'; } | sort | xargs sha256sum; }
 
 if [[ "${1:-}" == "--update" ]]; then
   head1 "更新规则清单"
@@ -27,13 +30,13 @@ head1 "规则清单"
   howto "跑： bash scripts/manifest.sh --update"; exit 1; }
 
 if diff <(gen) "$MF" >/dev/null 2>&1; then
-  ok "清单与 rules/ 一致（$(wc -l < "$MF") 条）"
+  ok "清单与 CLAUDE.md + rules/ 一致（$(wc -l < "$MF") 条）"
   exit 0
 fi
 
-bad "MANIFEST.sha256 与 rules/ 不一致"
+bad "MANIFEST.sha256 与 CLAUDE.md + rules/ 不一致"
 diff <(gen) "$MF" | grep -E '^[<>]' | sed 's/^/        /' | head -20
-howto "改了规则就要更新清单，否则各语言译文无从知道自己过期了：" \
+howto "改了规范正文或规则就要更新清单，否则各语言译文无从知道自己过期了：" \
       "bash scripts/manifest.sh --update" \
       "" \
       "清单不是装饰——它是译文仓唯一的对账依据。清单停滞 =" \

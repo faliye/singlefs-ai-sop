@@ -107,7 +107,7 @@ if [[ -z "$PAYLOAD" ]]; then
   say "  harness 已就绪（跑 --selftest 验证），缺的是被测对象。接上真实负载需要："
   say "    1. 磁盘格式第一版        —— kb/decisions.md 中 D4 / D8 待定"
   say "    2. mkfs + checker        —— checker 是 kb/invariants.md 的可执行形式"
-  say "    3. 事务提交路径          —— rules/fs-design.md「从事务开始」"
+  say "    3. 被测系统的提交路径     —— 先跑通提交，再谈功能"
   say "    4. 块层写记录            —— dm-log-writes，用于崩溃点重放"
   say ""
   bad "无负载可跑，按未完成处理"

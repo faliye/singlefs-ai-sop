@@ -11,8 +11,6 @@
 @.claude/singlefs-ai-sop/rules/doc-discipline.md
 @.claude/singlefs-ai-sop/rules/design-doc-discipline.md
 @.claude/singlefs-ai-sop/rules/kb-discipline.md
-@.claude/singlefs-ai-sop/rules/fs-design.md
-@.claude/singlefs-ai-sop/rules/format-evolution.md
 @.claude/singlefs-ai-sop/rules/test-discipline.md
 @.claude/singlefs-ai-sop/rules/evidence-discipline.md
 @.claude/singlefs-ai-sop/rules/verify-before-claiming.md
@@ -20,7 +18,10 @@
 @.claude/singlefs-ai-sop/rules/writing-economy.md
 @.claude/singlefs-ai-sop/rules/session-wrapup.md
 
-（这些是 [singlefs-ai-sop](.claude/singlefs-ai-sop/README.md) 分发的共享规则，
+**项目专有的规则**（只有本项目需要的那种）放 `.claude/rules/`，在这里一并 `@` 引用，
+不要上游到共享 SOP——那里只放跨项目通用的协作规范。
+
+（上面的 `@.claude/singlefs-ai-sop/...` 是 [singlefs-ai-sop](.claude/singlefs-ai-sop/README.md) 分发的共享规则，
 **改它们等于改所有项目**——要改就改上游并抬 `VERSION`，不许在项目里就地改。）
 
 ## 项目本地事实
@@ -31,6 +32,7 @@
 | `.claude/kb/invariants.md` | 不变量清单，checker 是它的可执行形式 |
 | `.claude/kb/prior-art.md` | 他家方案调研，含来源与口径 |
 | `.claude/kb/pitfalls.md` | 避坑清单，每做设计决定回来对一遍 |
+| `.claude/kb/checks-owed.md` | 欠的检查：知道要拦什么但还拦不了的，含前置 |
 | `records/` | 建设过程 |
 
 ## 门禁

@@ -6,6 +6,7 @@
 #   B. CLAUDE.md 不许有「## 历史版本」节（历史外置）
 #   C. kb/*.md 必须有「## 历史版本」节收尾
 #   D. kb/*.md 正文不许出现上下文指代（检索会把单条端出来，指代当场断掉）
+#   E. kb/*.md 里引用的不变量编号（I-<类>.<号>）必须真的被某张表定义过
 #
 # 围栏代码块内的内容不检查（那是示例）。
 # 定义规则本身的文件加 <!-- doc-lint:rule-definition --> 跳过，并会显式报告为已跳过。
@@ -107,9 +108,41 @@ while IFS= read -r f; do
   fi
 done < <(find "$ROOT" -name '*.md' -not -path '*/.git/*' -not -path '*/target/*' | sort)
 
+# E. 引用了不存在的编号 —— 空白比错误更危险（rules/kb-discipline.md 第 3 条）
+#    典型形态：「历史版本」写了「补 I-4.4~I-4.7」，正文其实没补，别处还在引用它们。
+#    人通读能察觉，检索不会——它只会把那条引用端出来，模型照单全收。
+reffails=0
+kb_files="$(find "$ROOT" -path '*/kb/*.md' -not -path '*/.git/*' | sort)"
+if [[ -n "$kb_files" ]]; then
+  # 定义 = 表格行首的编号；引用 = 别的任何位置出现的编号。围栏代码块不算。
+  defined="$(printf '%s\n' "$kb_files" | while IFS= read -r f; do
+      awk '/^```/ { infence = !infence; next } !infence' "$f"
+    done | grep -oE '^\| *I-[0-9]+\.[0-9]+ *\|' | grep -oE 'I-[0-9]+\.[0-9]+' | sort -u)"
+
+  while IFS= read -r f; do
+    rel="${f#"$ROOT"/}"
+    refs="$(awk '/^```/ { infence = !infence; next } !infence { print FNR "\t" $0 }' "$f" \
+            | grep -vE '\t\| *I-[0-9]+\.[0-9]+ *\|' || true)"
+    [[ -z "$refs" ]] && continue
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      ln="${line%%$'\t'*}"
+      for id in $(printf '%s' "$line" | grep -oE 'I-[0-9]+\.[0-9]+' | sort -u); do
+        if ! printf '%s\n' "$defined" | grep -qx "$id"; then
+          bad "$rel:$ln  引用了没有定义的不变量编号 $id"
+          howto "要么在 kb/invariants.md 里把 $id 真的写成一行（可判定的陈述 + checker 状态），" \
+                "要么删掉这处引用。引用一个不存在的编号，检索出来看不出它不存在——" \
+                "而模型不会说找不到，它会补一个（rules/kb-discipline.md 第 3 条）。"
+          reffails=$((reffails+1))
+        fi
+      done
+    done <<< "$refs"
+  done <<< "$kb_files"
+fi
+
 say ""
-if [[ $fails -gt 0 ]]; then
-  bad "文档铁律检查失败：$fails 个文件违规（检查 $checked，跳过 $skipped）"
+if [[ $fails -gt 0 || $reffails -gt 0 ]]; then
+  bad "文档铁律检查失败：$fails 个文件违规、$reffails 处编号引用无定义（检查 $checked，跳过 $skipped）"
   exit 1
 fi
 ok "文档铁律检查通过（检查 $checked，跳过 $skipped；DOC_LINT_VERBOSE=1 看全部）"

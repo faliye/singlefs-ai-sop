@@ -133,6 +133,6 @@ num_china_people[Ethnicity::Han][Gender::Woman][AgeBand::T18to24]
 
 | 面 | 落在哪 |
 |---|---|
-| 实现 | `machine-first.md`、`fs-design.md` 的分支规则、`kb-discipline.md` |
+| 实现 | `machine-first.md`、`kb-discipline.md`，以及各项目自己的设计纪律 |
 | 审核 | `show-me-test.md` 的 howto 要求、`design-doc-discipline.md`、决策记录的依据要求 |
 | 分界 | `show-me-test.md`「门禁能证明什么，不能证明什么」 |
