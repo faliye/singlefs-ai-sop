@@ -74,6 +74,90 @@
 - 宁可**生成**重复代码，不手工维护重复
 - 注释写「为什么这样」，不写「这在做什么」——后者机器自己读得出来
 
+## 这两条教条长什么样：代码示例
+
+前两条推论最常被争执，所以把它们写成可以直接指认的形态。
+争执一般起于「这条分支有必要吗」——**判据不是必要性，是穷尽性谁来检查。**
+
+### 教条一：穷举的显式分支胜过聪明的通用路径
+
+```rust
+// ✗ 通用路径：新增一种情形时，编译器什么也不说
+fn node_size(dev: &Device) -> u32 {
+    if dev.rotational { 64 * 1024 } else { 16 * 1024 }
+}
+```
+
+```rust
+// ✓ 穷举分支：新增 Zoned 之后不补这里就编译不过
+enum Medium {
+    Rotational,
+    Ssd,
+    Zoned { zone_size: u32 },
+}
+
+fn node_size(m: &Medium) -> u32 {
+    match m {                       // 关键在于**没有** `_ =>` 通配臂
+        Medium::Rotational          => 64 * 1024,
+        Medium::Ssd                 => 16 * 1024,
+        Medium::Zoned { zone_size } => (*zone_size).min(256 * 1024),
+    }
+}
+```
+
+**要害是那条没写的 `_ =>`。** 加上通配臂，代码看起来更短、更「通用」，
+而它恰好把编译器的穷尽性检查关掉了——新增一种情形时，
+程序会安静地走进通配臂，行为错误而没有任何人报警。
+
+**所以判据不是「分支多不多」，是「漏掉一种情形时谁会先发现」**：
+是编译器，还是生产环境。前者 → 显式分支；后者 → 那不是通用，是把检查删了。
+
+### 教条二：用类型让非法状态无法表示
+
+```rust
+// ✗ 同一种底层类型承载多种含义：混用编译通过，运行期才错
+fn read_block(addr: u64) -> Block;
+fn free_extent(start: u64, len: u64);
+// 调用点把逻辑地址传成物理地址，编译器无话可说
+```
+
+```rust
+// ✓ newtype：混用编译不过
+#[derive(Clone, Copy, PartialEq, Eq)] pub struct Lba(pub u64);  // 逻辑地址
+#[derive(Clone, Copy, PartialEq, Eq)] pub struct Pba(pub u64);  // 物理地址
+
+fn read_block(addr: Pba) -> Block;
+// read_block(Lba(x)) 直接编译不过 —— 一整类运行期 bug 变成编译期错误
+```
+
+再进一步，**把「还没验证过」也做成类型**，让「忘了验证」无法表示：
+
+```rust
+// ✗ 用布尔字段表达状态：忘了检查它，编译器不管
+struct Node { bytes: Vec<u8>, checksum_ok: bool }
+
+// ✓ 用类型表达状态：没验过的东西根本拿不到已验过的那个类型
+struct RawNode(Vec<u8>);        // 刚从盘上读出来，未验证
+struct VerifiedNode(Vec<u8>);   // 校验和已比对通过
+
+impl RawNode {
+    fn verify(self, expect: Checksum) -> Result<VerifiedNode, CorruptBlock> { /* ... */ }
+}
+
+fn walk(node: &VerifiedNode) { /* ... */ }   // 想跳过验证就构造不出入参
+```
+
+**这两条教条是同一件事的两面**：教条一让「漏掉一种情形」被编译器抓住，
+教条二让「非法组合」根本写不出来。**两者都是把检查从人转移给机器**，
+而这正是 `machine-first.md` 的判据——**让代码更容易被机械验证**。
+
+### 什么时候不该套用
+
+**这两条对「可删除的东西」无脑成立，对「删不掉的东西」要另算。**
+代码分支写错了可以删；而写进对外契约（磁盘格式、协议、公开 API）的分支删不掉，
+此后每一个实现都要永远支持它。那一侧的判据要另外定，
+不能拿「显式分支更安全」一句话推过去。
+
 ## 一条反向的提醒：文档纪律不在放弃之列
 
 `doc-discipline.md` 那套（正文只写现状、历史进文末、决策记录进 kb）
