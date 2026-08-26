@@ -14,6 +14,17 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 PKG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MF="$PKG/MANIFEST.sha256"
+CF="$PKG/I18N"
+
+# 清单只在参照仓里生成与校验。别的语言仓拿到的是原样复制的脚本，
+# 它们那边的对账依据是 SOURCE-MANIFEST.sha256，不是这份。
+THIS="$(sed -n 's/^this=//p' "$CF" 2>/dev/null)"
+REF="$(sed -n 's/^reference=//p' "$CF" 2>/dev/null)"
+if [[ -n "$THIS" && -n "$REF" && "$THIS" != "$REF" ]]; then
+  head1 "规则清单"
+  ok "本仓是 $THIS 版，清单以 $REF 仓为准，本阶段不适用"
+  exit 0
+fi
 
 gen() { cd "$PKG" && { echo CLAUDE.md; find rules -maxdepth 1 -name '*.md'; } | sort | xargs sha256sum; }
 

@@ -14,7 +14,7 @@ ROOT="${1:-$(project_root)}"
 [[ -d "$ROOT" ]] || die "找不到项目根"
 cd "$ROOT"
 
-STAGES=(); RESULTS=()
+STAGES=(); RESULTS=(); NOT_RUN=()
 record() { STAGES+=("$1"); RESULTS+=("$2"); }
 
 run_stage() { # run_stage <名称> <命令...>
@@ -60,8 +60,10 @@ say "  diff 基准：$BASE"
 files="$(changed_files "$ROOT" "$BASE")"
 
 if [[ -z "$files" ]]; then
-  warn "没有检测到任何变更 —— 门禁无对象可判"
-  record "Show me test" FAIL
+  # 无变更既不是通过也不是失败——没有可判的对象。判成失败会让「刚装完就有一格红」
+  # 成为常态，而红色一旦成为常态就不再是信号，人会开始习惯性忽略它。
+  warn "工作区与基准无差异 —— 本阶段无对象可判（这不是通过）"
+  NOT_RUN+=("Show me test        本次无对象可判：工作区与 $BASE 无差异。改动之后再跑，或指定基准： GATE_BASE=<ref> bash .claude/scripts/gate.sh")
 else
   code_changed="$(printf '%s\n' "$files" | grep -E '^crates/.*/src/.*\.rs$' || true)"
   test_files="$(printf '%s\n' "$files" | grep -E '(^|/)(tests|benches|fuzz)/' || true)"
@@ -143,7 +145,6 @@ else
 fi
 
 # ── 阶段 5：QEMU harness 自检（默认不跑，太慢）──────────
-NOT_RUN=()
 if [[ -n "${GATE_QEMU:-}" ]]; then
   run_stage "QEMU harness" bash "$SCRIPTS/qemu/run.sh" --selftest "$ROOT"
 else
