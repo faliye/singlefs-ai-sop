@@ -1,0 +1,4 @@
+# 语言族配置。三份文本地位相同，zh 只是蓝本（改动从这里发起）。
+family=singlefs-ai-sop
+blueprint=zh
+languages=zh ja en
