@@ -87,13 +87,16 @@ fi
 fi
 
 # ── 阶段 0b：门禁自身（每条拒绝都要给出路）──────────────
-run_stage "门禁自检" bash "$SCRIPTS/gate-lint.sh"
+# 项目本地阶段（.claude/gate.d/）也交给两个 lint：它们和共享阶段一样会拒绝提交者，
+# 而此前一条都没被查过——一喂就是 7 条没有出路的拒绝（singlefs 实测）。
+LINT_EXTRA=(); [[ -d "$ROOT/.claude/gate.d" ]] && LINT_EXTRA=("$ROOT/.claude/gate.d")
+run_stage "门禁自检" bash "$SCRIPTS/gate-lint.sh" "${LINT_EXTRA[@]}"
 # 每条拒绝有没有出路是一回事，检查本身红不红得起来是另一回事。
 # 后者靠样本证明（rules/sop-first.md：没有自检能力的门禁是摆设）。
 run_stage "门禁判别力" bash "$SCRIPTS/selftest.sh"
 # command-safety.md 里可机检的那几条：按模式匹配杀进程、子 shell 赋值往外带值。
 # 以前它们只是文档里的提醒句，而本仓自己的 qemu/run.sh 违反了其中一条整整一轮。
-run_stage "shell 纪律" bash "$SCRIPTS/shell-lint.sh"
+run_stage "shell 纪律" bash "$SCRIPTS/shell-lint.sh" "${LINT_EXTRA[@]}"
 
 # ── 阶段 1：文档铁律 ────────────────────────────────────
 run_stage "文档铁律" bash "$SCRIPTS/doc-lint.sh" "$ROOT"

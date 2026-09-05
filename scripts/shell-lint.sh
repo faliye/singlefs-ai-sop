@@ -44,7 +44,10 @@ SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 样本排除写成**相对本次 SCAN** 的前缀：写死成 */fixtures/* 的话，
 # 拿样本目录当 SCAN 跑时会把样本自己全排除掉，自检当场变成摆设（doc-lint 踩过）。
 SCAN="${SHELL_LINT_DIR:-$(cd "$SCRIPTS/.." && pwd)}"
-EXCL=(-not -path "$SCAN/scripts/fixtures/*" -not -path "$SCAN/fixtures/*")
+# 位置参数是**额外**要扫的目录（gate.sh 拿它传项目本地阶段目录）。
+# 项目扔进 .claude/gate.d/ 的阶段跑在同一道门禁里，命令安全的坑对它们一样致命。
+SCANS=("$SCAN")
+for d in "$@"; do [[ -d "$d" ]] && SCANS+=("$(cd "$d" && pwd)"); done
 [[ -n "${GATE_IN_STAGE:-}" ]] || head1 "shell 纪律检查"
 
 # 命令位置的前缀。与 gate-lint.sh 的 BAD_RE 同一个思路：
@@ -73,8 +76,10 @@ S2_RE="$CMD_POS$PK"'(pkill([[:space:]]+-[[:alnum:]-]*)*[[:space:]]+(-[[:alnum:]]
 S3_RE="$CMD_POS$PK"'pgrep([[:space:]]+-[[:alnum:]-]*)*[[:space:]]+(-[[:alnum:]]*f[[:alnum:]]*|--full)'
 
 fails=0; checked=0
+for BASE in "${SCANS[@]}"; do
+EXCL=(-not -path "$BASE/scripts/fixtures/*" -not -path "$BASE/fixtures/*")
 while IFS= read -r f; do
-  rel="${f#"$SCAN"/}"
+  rel="${f#"$BASE"/}"
   checked=$((checked+1))
 
   # ── S2 按模式匹配杀进程 ─────────────────────────────────
@@ -236,7 +241,8 @@ while IFS= read -r f; do
       }
     }
   ' "$f")
-done < <(find "$SCAN" -name '*.sh' "${EXCL[@]}" | sort)
+done < <(find "$BASE" -name '*.sh' "${EXCL[@]}" | sort)
+done
 
 say ""
 if [[ $fails -gt 0 ]]; then

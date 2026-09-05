@@ -70,7 +70,7 @@ if [[ -z "$code_changed" ]]; then
   ok "无 crates 代码改动（仅文档/脚本），本阶段不适用"
   exit 0
 elif [[ -n "$tests_content_ok" || -n "$test_lines" ]]; then
-  ok "代码改动伴随测试改动"
+  ok "代码改动伴随测试改动（改了 $(printf '%s\n' "$code_changed" | grep -c .) 个代码文件）"
   [[ -n "$test_files" ]] && printf '%s\n' "$test_files" | sed 's/^/        测试文件: /'
   [[ -n "$test_lines" ]] && say "        新增测试标注 $(printf '%s\n' "$test_lines" | grep -c .) 处"
   warn "脚本只能验证「有测试」，验证不了「测试会红」——"

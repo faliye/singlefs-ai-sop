@@ -6,7 +6,7 @@
 #   一条只说「不合格」的失败信息，等于把「怎么做才对」留给人猜——
 #   而人只能靠猜的时候，就会去绕过门禁，或者干脆不提交。
 #
-# 查两种拒绝形态：
+# 查三条：前两条是拒绝的形态，第三条是「通过」的形态。
 #
 # 一、bad：从它那一行起 5 个非注释行内必须出现 howto **命令**。
 #   - bad 认的形态：行首、`;`/`{`/`||`/`&&`/`then`/`else`/`do` 之后、
@@ -22,6 +22,11 @@
 #   以前 gate-lint 只认 bad，于是 17 处 die 整体免检——`die "单测失败"`
 #   这种毫无下一步的拒绝就在门禁路径上（本轮审计实测）。
 #
+# 三、扫一批对象的脚本，成功摘要要报出检查了多少项。
+#   「扫到 0 项」不是通过：判据写窄了、对象全被第一步跳过时，末尾照样报绿，
+#   而没有任何人看得出来（singlefs C114：一个阶段的第 3 项就这样绿着）。
+#   只对**报了成功**的脚本判；确实不扫对象的写 `# gate-lint:nocount <理由>`。
+#
 # 认不出参数个数的形态（消息是变量、或引号被转义拆开）**不判**，
 # 交给 lib.sh 的运行期兜底。这里只拦看得明白的那些——机器管得了哪一半要说清楚。
 #
@@ -35,7 +40,11 @@ SCRIPTS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 样本排除写成**相对本次 SCAN** 的前缀：写死成 */fixtures/* 的话，
 # 拿样本目录当 SCAN 跑时会把样本自己全排除掉，自检当场变成摆设（doc-lint 踩过）。
 SCAN="${GATE_LINT_DIR:-$(cd "$SCRIPTS/.." && pwd)}"
-EXCL=(-not -path "$SCAN/scripts/fixtures/*" -not -path "$SCAN/fixtures/*")
+# 位置参数是**额外**要扫的目录（gate.sh 拿它传项目本地阶段目录）。
+# 此前只扫本包：项目扔进 .claude/gate.d/ 的阶段一条都没被查过，
+# 而它们和共享阶段一样会拒绝提交者——一喂就是 7 条没有出路的拒绝（本仓实测）。
+SCANS=("$SCAN")
+for d in "$@"; do [[ -d "$d" ]] && SCANS+=("$(cd "$d" && pwd)"); done
 head1 "门禁自检（每条拒绝都要给出路）"
 
 # HOWTO_WINDOW 是 rules/sop-first.md 写下的那个数（bad 自己那行 + 后面 4 行）。
@@ -72,9 +81,12 @@ naked_die() {
   return 1
 }
 
-fails=0; checked=0
+fails=0; checked=0; files=0
+for BASE in "${SCANS[@]}"; do
+EXCL=(-not -path "$BASE/scripts/fixtures/*" -not -path "$BASE/fixtures/*")
 while IFS= read -r f; do
-  rel="${f#"$SCAN"/}"
+  rel="${f#"$BASE"/}"
+  files=$((files+1))
   mapfile -t L < "$f"
   hd=""
   for ((i=0; i<${#L[@]}; i++)); do
@@ -89,6 +101,9 @@ while IFS= read -r f; do
       hd="${BASH_REMATCH[1]}"
     fi
     [[ "$line" =~ ^[[:space:]]*# ]] && continue        # 注释里的拒绝不算
+    # 算术展开不是命令位置：`bad=$((bad + 1))` 里的 `bad ` 紧跟在 `(` 后面，
+    # 按 CMD_POS 读就成了一处「拒绝」，而它只是个计数（本仓 gate.d 实测两处假红）。
+    while [[ "$line" == *'$(('* ]]; do line="${line%%'$(('*}${line#*'))'}"; done
 
     if [[ "$line" =~ $DIE_RE ]] && naked_die "$line"; then
       checked=$((checked+1))
@@ -121,11 +136,31 @@ while IFS= read -r f; do
       fails=$((fails+1))
     fi
   done
-done < <(find "$SCAN" -name '*.sh' -not -name 'lib.sh' "${EXCL[@]}" | sort)
+
+  # ── G3 成功摘要要报出检查了多少项 ───────────────────────
+  # 「扫到 0 项」不是通过。实测：一个阶段的第 3 项因为搜索范围写窄，
+  # 每个对象都在第一步 continue，既不算 ok 也不算 bad，末尾照样报绿——
+  # 它这样绿了不知道多久，没有任何人看得出来（本仓 C114）。
+  # 判据只对扫一批对象的脚本生效；成功摘要里带上计数变量，0 项就自己露出来。
+  if printf '%s\n' "${L[@]}" | grep -qE 'while[[:space:]]+.*read|for[[:space:]]+[A-Za-z_]+[[:space:]]+in|find[[:space:]]' \
+     && ! printf '%s\n' "${L[@]}" | grep -q 'gate-lint:nocount'; then
+    succ="$(printf '%s\n' "${L[@]}" | grep -vE '^[[:space:]]*#' | grep -E '^[[:space:]]*ok[[:space:]]+"|✓' || true)"
+    # 判据只对**报了成功**的脚本生效。一个字都不说的脚本是另一类问题，这里不判——
+    # 「认不出」与「通过」要分开（rules/show-me-test.md）。
+    if [[ -n "$succ" ]] && ! grep -q '\$' <<< "$succ"; then
+      bad "$rel  成功摘要没报出检查了多少项——扫到 0 项也会报绿"
+      howto "在成功那句里带上计数，例： ok \"检查通过（共 \$n 项）\"；" \
+            "并让计数真的在循环里累加。确实不扫对象的脚本，写一句" \
+            "# gate-lint:nocount <理由> 显式豁免（rules/show-me-test.md）。"
+      fails=$((fails+1))
+    fi
+  fi
+done < <(find "$BASE" -name '*.sh' -not -name 'lib.sh' "${EXCL[@]}" | sort)
+done
 
 say ""
 if [[ $fails -gt 0 ]]; then
-  bad "门禁自检失败：$fails 条拒绝没有出路（共检查 $checked 条）"   # gate-lint:summary
+  bad "门禁自检失败：$fails 处（共 $files 个脚本、$checked 条拒绝）"   # gate-lint:summary
   exit 1
 fi
-ok "门禁自检通过：$checked 条拒绝都带了出路"
+ok "门禁自检通过：$files 个脚本、$checked 条拒绝都带了出路"
