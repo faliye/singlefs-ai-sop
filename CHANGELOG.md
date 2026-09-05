@@ -3,6 +3,12 @@
 规则与门禁的版本历史。`CLAUDE.md` 与 `rules/*.md` 不留历史节（design-doc-discipline），
 历史一律记在这里；逐条改动细节见 `git log`，提交信息即变更说明。
 
+## 0.0.28 — 2026-09-05
+
+**计数判据认 python 的 f-string。** 只认 shell 的 `$n` 时，用 python 实现的阶段
+整批假红——它们的成功摘要在 python 里格式化（singlefs 的两个阶段实测）。
+样本 `countpy`；`nocount` 仍红，判据没有被掏空。
+
 ## 0.0.27 — 2026-09-05
 
 **修 0.0.26 自己引入的一处无限循环，并给 selftest 加超时保护。**
